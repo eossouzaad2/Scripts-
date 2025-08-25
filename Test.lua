@@ -1,2 +1,5 @@
-print("Velocidade 50 Carregada")
+while true do
+
 game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 50
+  wait(0.1)
+end
