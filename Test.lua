@@ -1,53 +1,67 @@
---[[
-    SozaHub - Ultra Exploit Test Script v1.0
-    Foco: Testes de anti-cheat no Steal a Braintot
-    Features: Fly, Speed, Noclip, Teleport, Menu Neon, Player List, ESP, Teleport/Puxar, Heartbeat, Drag GUI, Modular
-    Use apenas para estudo/teste. NÃO para uso malicioso.
---]]
+-- SozaHub GUI Exploit Test - Corrigido, funcional, com interface profissional e drag&drop
 
--- Obfuscation helpers
+-- Helpers
 local HttpService = game:GetService("HttpService")
 local function rid() return HttpService:GenerateGUID(false):gsub("-", "") end
-local _v = {}; for _,v in pairs({"fly","speed","noclip","esp","tele","menu","drag","players","state","gui","root","hum","heartbeat","espConns"}) do _v[v]=rid() end
-
 local UIS, Players, RS = game:GetService("UserInputService"), game:GetService("Players"), game:GetService("RunService")
 local LP, Camera = Players.LocalPlayer, workspace.CurrentCamera
-local char, hum, root = LP.Character or LP.CharacterAdded:Wait(), nil, nil
-local function updateChar() char=LP.Character; hum=char:WaitForChild("Humanoid"); root=char:WaitForChild("HumanoidRootPart") end
-updateChar()
+
+local function waitForChar()
+    local c = LP.Character or LP.CharacterAdded:Wait()
+    repeat wait() until c:FindFirstChild("Humanoid") and c:FindFirstChild("HumanoidRootPart")
+    return c, c.Humanoid, c.HumanoidRootPart
+end
+local char, hum, root = waitForChar()
 
 -- Estado dos módulos
-local state = {[_v.fly]=false,[_v.speed]=false,[_v.noclip]=false,[_v.esp]=false}
-local flySpeed, walkSpeed, normalSpeed = 90, 38, 16
-local guiName = "SozaHub_"..rid()
-local dragData = {dragging=false,dx=0,dy=0}
+local state = {fly=false, speed=false, noclip=false, esp=false}
+local flySpeed, walkSpeed, normalSpeed = 90, 38, hum.WalkSpeed
 local espBoxes, espConns = {}, {}
+local dragging, dragInput, dragStart, startPos
 
 -- GUI principal
 local scr = Instance.new("ScreenGui")
-scr.Name = guiName
+scr.Name = "SozaHub_"..rid()
 scr.IgnoreGuiInset = true
 scr.ResetOnSpawn = false
 scr.Parent = game.CoreGui
 
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 370, 0, 340)
-main.Position = UDim2.new(0.5, -185, 0.33, 0)
-main.BackgroundColor3 = Color3.fromRGB(20,23,33)
-main.BackgroundTransparency = 0.08
+main.Size = UDim2.new(0, 390, 0, 350)
+main.Position = UDim2.new(0.5, -195, 0.33, 0)
+main.BackgroundColor3 = Color3.fromRGB(18,22,29)
+main.BackgroundTransparency = 0
 main.BorderSizePixel = 0
 main.Active = true
-main.ZIndex = 10
+main.Selectable = true
 main.Parent = scr
 
 local neon = Instance.new("UIStroke", main)
-neon.Color = Color3.fromHSV(math.random(),1,1)
-neon.Thickness = 4
-neon.Transparency = 0.2
+neon.Color = Color3.fromRGB(0,255,200)
+neon.Thickness = 3
+neon.Transparency = 0.1
+
+-- Drag & drop funcional
+main.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = main.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+UIS.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
 
 -- Título
 local title = Instance.new("TextLabel", main)
-title.Size = UDim2.new(1, 0, 0, 40)
+title.Size = UDim2.new(1, 0, 0, 44)
 title.BackgroundTransparency = 1
 title.Text = "🧠 SozaHub - Steal a Braintot"
 title.Font = Enum.Font.GothamBlack
@@ -56,33 +70,22 @@ title.TextColor3 = Color3.fromRGB(0,255,200)
 title.TextStrokeTransparency = 0.7
 
 local subt = Instance.new("TextLabel", main)
-subt.Size = UDim2.new(1, -20, 0, 18)
-subt.Position = UDim2.new(0,10,0,36)
+subt.Size = UDim2.new(1, -16, 0, 18)
+subt.Position = UDim2.new(0,8,0,37)
 subt.BackgroundTransparency = 1
-subt.Text = "Ultra Exploit (test) | Foco: anti-cheat | Neon UI | Players Hub | "..rid():sub(1,4)
+subt.Text = "Ultra Exploit (test) | Foco: anti-cheat | Neon UI | Players Hub"
 subt.Font = Enum.Font.GothamSemibold
 subt.TextSize = 13
 subt.TextColor3 = Color3.fromRGB(0, 255, 127)
 subt.TextXAlignment = Enum.TextXAlignment.Left
 
--- Drag
-main.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragData.dragging=true; dragData.dx=input.Position.X-main.Position.X.Offset; dragData.dy=input.Position.Y-main.Position.Y.Offset end
-end)
-main.InputEnded:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 then dragData.dragging=false end end)
-UIS.InputChanged:Connect(function(input)
-    if dragData.dragging and input.UserInputType==Enum.UserInputType.MouseMovement then
-        main.Position = UDim2.new(0, input.Position.X - dragData.dx, 0, input.Position.Y - dragData.dy)
-    end
-end)
-
--- Aba de navegação
+-- Abas
 local tabs = {"Main","Players","ESP","Config"}
 local tabFrames, tabBtns, curTab = {}, {}, nil
 local function createTab(name, idx)
     local btn = Instance.new("TextButton", main)
-    btn.Size = UDim2.new(0, 90, 0, 26)
-    btn.Position = UDim2.new(0, 15 + (idx-1)*92, 0, 60)
+    btn.Size = UDim2.new(0, 92, 0, 28)
+    btn.Position = UDim2.new(0, 11 + (idx-1)*97, 0, 60)
     btn.BackgroundColor3 = Color3.fromRGB(24,30,45)
     btn.TextColor3 = Color3.fromRGB(0,255,150)
     btn.Font = Enum.Font.GothamBold
@@ -92,13 +95,13 @@ local function createTab(name, idx)
     btn.ZIndex = 11
     tabBtns[name] = btn
     local frame = Instance.new("Frame", main)
-    frame.Size = UDim2.new(1, -20, 1, -100)
-    frame.Position = UDim2.new(0, 10, 0, 95)
+    frame.Size = UDim2.new(1, -22, 1, -100)
+    frame.Position = UDim2.new(0, 11, 0, 95)
     frame.BackgroundTransparency = 1
     frame.Visible = false
     tabFrames[name] = frame
     btn.MouseButton1Click:Connect(function()
-        if curTab then tabFrames[curTab].Visible=false; tabBtns[curTab].TextColor3=Color3.fromRGB(0,255,150) end
+        for _,t in ipairs(tabs) do tabFrames[t].Visible = false; tabBtns[t].TextColor3 = Color3.fromRGB(0,255,150) end
         curTab = name
         frame.Visible=true; btn.TextColor3=Color3.fromRGB(255,255,255)
     end)
@@ -107,7 +110,8 @@ for i,t in ipairs(tabs) do createTab(t,i) end
 tabFrames["Main"].Visible=true; curTab="Main"; tabBtns["Main"].TextColor3=Color3.fromRGB(255,255,255)
 
 -- Main Tab: Exploits
-local y = 15
+local mainBtns = {}
+local y = 16
 local function addMainBtn(txt, key, onClick)
     local b = Instance.new("TextButton", tabFrames.Main)
     b.Size = UDim2.new(0, 170, 0, 38)
@@ -125,16 +129,75 @@ local function addMainBtn(txt, key, onClick)
     st.Thickness = 1.2
     st.Transparency = 0.7
     b.MouseButton1Click:Connect(onClick)
+    mainBtns[key] = b
     y = y + 44
     return b
 end
-local mainBtns = {
-    fly = addMainBtn("Fly: 🔴", "fly", function() SozaHubModules.fly.toggle() end),
-    speed = addMainBtn("Speed: 🔴", "speed", function() SozaHubModules.speed.toggle() end),
-    noclip = addMainBtn("Noclip: 🔴", "noclip", function() SozaHubModules.noclip.toggle() end),
-    teleport = addMainBtn("Q+W/S Teleport", "teleport", function() end),
-    destroy = addMainBtn("💥 Auto-destruir SozaHub", "destroy", function() scr:Destroy() warn("SozaHub destroyed") end),
-}
+addMainBtn("Fly: 🔴", "fly", function()
+    state.fly = not state.fly
+    mainBtns.fly.Text = "Fly: "..(state.fly and "🟢" or "🔴")
+    mainBtns.fly.TextColor3 = state.fly and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
+    if state.fly then
+        hum.PlatformStand=true
+        local bp=Instance.new("BodyPosition",root)
+        bp.MaxForce=Vector3.new(1e5,1e5,1e5)
+        bp.P=9e4
+        bp.D=1000
+        bp.Position=root.Position
+        local bg=Instance.new("BodyGyro",root)
+        bg.MaxTorque=Vector3.new(1e5,1e5,1e5)
+        bg.CFrame=root.CFrame
+        bg.P=9e4
+        mainBtns.bp=bp; mainBtns.bg=bg
+        mainBtns.flyConn=RS.RenderStepped:Connect(function()
+            local cf=Camera.CFrame; local dir=Vector3.new()
+            if UIS:IsKeyDown(Enum.KeyCode.W) then dir=dir+cf.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.S) then dir=dir-cf.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.A) then dir=dir-cf.RightVector end
+            if UIS:IsKeyDown(Enum.KeyCode.D) then dir=dir+cf.RightVector end
+            if UIS:IsKeyDown(Enum.KeyCode.Space) then dir=dir+Vector3.new(0,1,0) end
+            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir=dir-Vector3.new(0,1,0) end
+            bp.Position=root.Position+(dir.Magnitude>0 and dir.Unit or Vector3.new())*flySpeed/60
+            bg.CFrame=Camera.CFrame
+        end)
+    else
+        hum.PlatformStand=false
+        pcall(function() mainBtns.bp:Destroy() end)
+        pcall(function() mainBtns.bg:Destroy() end)
+        if mainBtns.flyConn then mainBtns.flyConn:Disconnect() end
+    end
+end)
+addMainBtn("Speed: 🔴", "speed", function()
+    state.speed = not state.speed
+    mainBtns.speed.Text = "Speed: "..(state.speed and "🟢" or "🔴")
+    mainBtns.speed.TextColor3 = state.speed and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
+    if state.speed then
+        if mainBtns.speedConn then mainBtns.speedConn:Disconnect() end
+        mainBtns.speedConn = RS.RenderStepped:Connect(function()
+            if hum and hum.Health>0 and not state.fly then hum.WalkSpeed = walkSpeed end
+        end)
+    else
+        if mainBtns.speedConn then mainBtns.speedConn:Disconnect() end
+        if not state.fly then hum.WalkSpeed = normalSpeed end
+    end
+end)
+addMainBtn("Noclip: 🔴", "noclip", function()
+    state.noclip = not state.noclip
+    mainBtns.noclip.Text = "Noclip: "..(state.noclip and "🟢" or "🔴")
+    mainBtns.noclip.TextColor3 = state.noclip and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
+    if state.noclip then
+        if mainBtns.noclipConn then mainBtns.noclipConn:Disconnect() end
+        mainBtns.noclipConn = RS.Stepped:Connect(function()
+            if char and state.noclip then for _,v in pairs(char:GetChildren()) do if v:IsA("BasePart") then v.CanCollide=false end end end
+        end)
+    else
+        if mainBtns.noclipConn then mainBtns.noclipConn:Disconnect() end
+        if char then for _,v in pairs(char:GetChildren()) do if v:IsA("BasePart") then v.CanCollide=true end end end
+    end
+end)
+addMainBtn("Q+W/S Teleport", "teleport", function() end)
+addMainBtn("💥 Auto-destruir SozaHub", "destroy", function() scr:Destroy() warn("SozaHub destroyed") end)
+
 local info = Instance.new("TextLabel", tabFrames.Main)
 info.Size = UDim2.new(1, -10, 0, 66)
 info.Position = UDim2.new(0, 0, 1, -66)
@@ -148,7 +211,7 @@ info.TextYAlignment = Enum.TextYAlignment.Top
 
 -- ESP Tab: global ESP (todos players)
 local espBtn = Instance.new("TextButton", tabFrames.ESP)
-espBtn.Size = UDim2.new(0, 190, 0, 38)
+espBtn.Size = UDim2.new(0, 200, 0, 38)
 espBtn.Position = UDim2.new(0, 10, 0, 20)
 espBtn.BackgroundColor3 = Color3.fromRGB(39, 43, 56)
 espBtn.TextColor3 = Color3.fromRGB(255,255,255)
@@ -156,7 +219,52 @@ espBtn.Font = Enum.Font.Gotham
 espBtn.TextSize = 17
 espBtn.Text = "ESP Global: 🔴"
 espBtn.BorderSizePixel = 0
-espBtn.MouseButton1Click:Connect(function() SozaHubModules.esp.toggle() end)
+
+local function playerESPBox(plr)
+    if not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then return end
+    local box = Instance.new("BoxHandleAdornment")
+    box.Adornee = plr.Character.HumanoidRootPart
+    box.AlwaysOnTop=true
+    box.ZIndex=10
+    box.Size = Vector3.new(3,6,3)
+    box.Color3 = Color3.fromRGB(0,255,127)
+    box.Transparency = 0.6
+    box.Parent = workspace
+    table.insert(espBoxes, box)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Adornee = plr.Character.HumanoidRootPart
+    billboard.Size = UDim2.new(0,100,0,30)
+    billboard.AlwaysOnTop = true
+    billboard.StudsOffset = Vector3.new(0,4,0)
+    local lbl = Instance.new("TextLabel", billboard)
+    lbl.Size=UDim2.new(1,0,1,0)
+    lbl.Text=plr.Name
+    lbl.TextColor3=Color3.fromRGB(0,255,127)
+    lbl.BackgroundTransparency=1
+    lbl.Font=Enum.Font.GothamBold
+    lbl.TextSize=16
+    billboard.Parent = workspace
+    table.insert(espBoxes, billboard)
+end
+local function clearESP() for _,v in ipairs(espBoxes) do pcall(function() v:Destroy() end) end; espBoxes={} end
+
+espBtn.MouseButton1Click:Connect(function()
+    state.esp = not state.esp
+    espBtn.Text="ESP Global: "..(state.esp and "🟢" or "🔴")
+    espBtn.TextColor3 = state.esp and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
+    clearESP()
+    if state.esp then
+        for _,plr in ipairs(Players:GetPlayers()) do if plr~=LP then playerESPBox(plr) end end
+        if espConns.players then espConns.players:Disconnect() end
+        if espConns.char then espConns.char:Disconnect() end
+        espConns.players=Players.PlayerAdded:Connect(function(plr) task.wait(1); if plr~=LP then playerESPBox(plr) end end)
+        espConns.char=Players.PlayerRemoving:Connect(function(plr) clearESP() end)
+    else
+        for _,v in pairs(espConns) do if v then v:Disconnect() end end
+        espConns={}
+        clearESP()
+    end
+end)
 
 -- Players Tab
 local playersFrame = tabFrames.Players
@@ -184,35 +292,6 @@ local function clearPlayerList()
         if v:IsA("TextButton") or v:IsA("Frame") then v:Destroy() end
     end
 end
-
-local function playerESPBox(plr)
-    if not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then return end
-    local box = Instance.new("BoxHandleAdornment")
-    box.Adornee = plr.Character.HumanoidRootPart
-    box.AlwaysOnTop=true
-    box.ZIndex=10
-    box.Size = Vector3.new(3,6,3)
-    box.Color3 = Color3.fromRGB(0,255,127)
-    box.Transparency = 0.6
-    box.Parent = workspace
-    table.insert(espBoxes, box)
-    -- Nome acima
-    local billboard = Instance.new("BillboardGui")
-    billboard.Adornee = plr.Character.HumanoidRootPart
-    billboard.Size = UDim2.new(0,100,0,30)
-    billboard.AlwaysOnTop = true
-    billboard.StudsOffset = Vector3.new(0,4,0)
-    local lbl = Instance.new("TextLabel", billboard)
-    lbl.Size=UDim2.new(1,0,1,0)
-    lbl.Text=plr.Name
-    lbl.TextColor3=Color3.fromRGB(0,255,127)
-    lbl.BackgroundTransparency=1
-    lbl.Font=Enum.Font.GothamBold
-    lbl.TextSize=16
-    billboard.Parent = workspace
-    table.insert(espBoxes, billboard)
-end
-local function clearESP() for _,v in ipairs(espBoxes) do pcall(function() v:Destroy() end) end; espBoxes={} end
 
 local function playerMenu(plr)
     local menu = Instance.new("Frame", scr)
@@ -280,6 +359,8 @@ local function updatePlayerList()
 end
 refreshBtn.MouseButton1Click:Connect(updatePlayerList)
 updatePlayerList()
+Players.PlayerRemoving:Connect(function() updatePlayerList() end)
+Players.PlayerAdded:Connect(function() wait(0.5); updatePlayerList() end)
 
 -- Config Tab (ajuste)
 local configLbl = Instance.new("TextLabel", tabFrames.Config)
@@ -292,90 +373,6 @@ configLbl.Font=Enum.Font.Gotham
 configLbl.TextSize=16
 configLbl.TextXAlignment=Enum.TextXAlignment.Left
 configLbl.TextYAlignment=Enum.TextYAlignment.Top
-
--- Modular Exploit System
-SozaHubModules = {}
--- Fly
-function SozaHubModules.fly.toggle()
-    state[_v.fly]=not state[_v.fly]
-    mainBtns.fly.Text="Fly: "..(state[_v.fly] and "🟢" or "🔴")
-    mainBtns.fly.TextColor3=state[_v.fly] and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
-    if state[_v.fly] then
-        hum.PlatformStand=true
-        local bp=Instance.new("BodyPosition",root)
-        bp.MaxForce=Vector3.new(1e5,1e5,1e5)
-        bp.P=9e4
-        bp.D=1000
-        bp.Position=root.Position
-        local bg=Instance.new("BodyGyro",root)
-        bg.MaxTorque=Vector3.new(1e5,1e5,1e5)
-        bg.CFrame=root.CFrame
-        bg.P=9e4
-        SozaHubModules.fly._bp=bp; SozaHubModules.fly._bg=bg;
-        SozaHubModules.fly._conn=RS.RenderStepped:Connect(function()
-            local cf=Camera.CFrame; local dir=Vector3.new()
-            if UIS:IsKeyDown(Enum.KeyCode.W) then dir=dir+cf.LookVector end
-            if UIS:IsKeyDown(Enum.KeyCode.S) then dir=dir-cf.LookVector end
-            if UIS:IsKeyDown(Enum.KeyCode.A) then dir=dir-cf.RightVector end
-            if UIS:IsKeyDown(Enum.KeyCode.D) then dir=dir+cf.RightVector end
-            if UIS:IsKeyDown(Enum.KeyCode.Space) then dir=dir+Vector3.new(0,1,0) end
-            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir=dir-Vector3.new(0,1,0) end
-            bp.Position=root.Position+(dir.Magnitude>0 and dir.Unit or Vector3.new())*flySpeed/60
-            bg.CFrame=Camera.CFrame
-        end)
-    else
-        hum.PlatformStand=false
-        pcall(function() SozaHubModules.fly._bp:Destroy() end)
-        pcall(function() SozaHubModules.fly._bg:Destroy() end)
-        if SozaHubModules.fly._conn then SozaHubModules.fly._conn:Disconnect() end
-    end
-end
--- Speed
-function SozaHubModules.speed.toggle()
-    state[_v.speed]=not state[_v.speed]
-    mainBtns.speed.Text="Speed: "..(state[_v.speed] and "🟢" or "🔴")
-    mainBtns.speed.TextColor3=state[_v.speed] and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
-    if state[_v.speed] then
-        if SozaHubModules.speed._conn then SozaHubModules.speed._conn:Disconnect() end
-        SozaHubModules.speed._conn=RS.RenderStepped:Connect(function()
-            if hum and hum.Health>0 and not state[_v.fly] then hum.WalkSpeed=walkSpeed end
-        end)
-    else
-        if SozaHubModules.speed._conn then SozaHubModules.speed._conn:Disconnect() end
-        if not state[_v.fly] then hum.WalkSpeed=normalSpeed end
-    end
-end
--- Noclip
-function SozaHubModules.noclip.toggle()
-    state[_v.noclip]=not state[_v.noclip]
-    mainBtns.noclip.Text="Noclip: "..(state[_v.noclip] and "🟢" or "🔴")
-    mainBtns.noclip.TextColor3=state[_v.noclip] and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
-    if state[_v.noclip] then
-        if SozaHubModules.noclip._conn then SozaHubModules.noclip._conn:Disconnect() end
-        SozaHubModules.noclip._conn=RS.Stepped:Connect(function()
-            if char and state[_v.noclip] then for _,v in pairs(char:GetChildren()) do if v:IsA("BasePart") then v.CanCollide=false end end end
-        end)
-    else
-        if SozaHubModules.noclip._conn then SozaHubModules.noclip._conn:Disconnect() end
-        if char then for _,v in pairs(char:GetChildren()) do if v:IsA("BasePart") then v.CanCollide=true end end end
-    end
-end
--- ESP (global)
-function SozaHubModules.esp.toggle()
-    state[_v.esp]=not state[_v.esp]
-    espBtn.Text="ESP Global: "..(state[_v.esp] and "🟢" or "🔴")
-    espBtn.TextColor3=state[_v.esp] and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
-    clearESP()
-    if state[_v.esp] then
-        for _,plr in ipairs(Players:GetPlayers()) do if plr~=LP then playerESPBox(plr) end end
-        espConns.players=Players.PlayerAdded:Connect(function(plr) task.wait(1); if plr~=LP then playerESPBox(plr) end end)
-        espConns.char=Players.PlayerRemoving:Connect(function(plr) clearESP() end)
-    else
-        for _,v in pairs(espConns) do if v then v:Disconnect() end end
-        espConns={}
-        clearESP()
-    end
-end
 
 -- Teleport Q+W/Q+S
 local qDown,wDown,sDown=false,false,false
@@ -393,27 +390,29 @@ UIS.InputEnded:Connect(function(i)
     if i.KeyCode==Enum.KeyCode.S then sDown=false end
 end)
 
--- Heartbeat (obfuscação dinâmica)
-spawn(function()
-    while scr and scr.Parent do
-        neon.Color = Color3.fromHSV(tick()%5/5,1,1)
-        scr.Name=guiName..rid():sub(1,5)
-        main.Name="SZ_"..rid():sub(1,6)
-        wait(math.random(1,6)/10)
+-- Menu Toggle (RightCtrl)
+UIS.InputBegan:Connect(function(i,g)
+    if g then return end
+    if i.KeyCode == Enum.KeyCode.RightControl then
+        main.Visible = not main.Visible
     end
 end)
 
--- Respawn handler
+-- Respawn Handler
 LP.CharacterAdded:Connect(function()
-    task.wait(1)
-    updateChar()
-    if state[_v.speed] then SozaHubModules.speed.toggle() SozaHubModules.speed.toggle() end
-    if state[_v.noclip] then SozaHubModules.noclip.toggle() SozaHubModules.noclip.toggle() end
+    wait(1)
+    char, hum, root = waitForChar()
+    normalSpeed = hum.WalkSpeed
+    if state.speed then mainBtns.speed.MouseButton1Click:Fire() mainBtns.speed.MouseButton1Click:Fire() end
+    if state.noclip then mainBtns.noclip.MouseButton1Click:Fire() mainBtns.noclip.MouseButton1Click:Fire() end
 end)
 
--- Hide from CoreGui
-for _,v in ipairs(scr:GetChildren()) do pcall(function() v.RobloxLocked=true end) end
-Players.PlayerRemoving:Connect(function() updatePlayerList() end)
-Players.PlayerAdded:Connect(function() task.wait(0.5); updatePlayerList() end)
+-- Neon animado
+spawn(function()
+    while scr and scr.Parent do
+        neon.Color = Color3.fromHSV((tick()%5)/5,1,1)
+        wait(0.07)
+    end
+end)
 
-warn("SozaHub loaded for anti-cheat testing - Steal a Braintot")
+warn("SozaHub loaded and GUI fully functional!")
