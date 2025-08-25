@@ -1,291 +1,337 @@
 --[[
-  Test Toolkit (Somente para seu jogo/ambiente de testes)
-  Coloque este LocalScript em: StarterPlayer > StarterPlayerScripts
-
-  Controles:
-    P -> Fly ON/OFF
-    L -> Velocidade ON/OFF
-    Q + W -> Teleporta 15 studs para frente
-    Q + S -> Teleporta 15 studs para trás
+   Ultra Advanced Script - Obfuscated, Dynamic, Anti-cheat Challenge
+   Features: Fly, Speed, Noclip, Teleport, Drag GUI, Animated Neon Menu, Dynamic Obfuscation, Heartbeat, Anti-detection
+   Test only in safe environments!
 ]]
 
--- =======================
--- CONFIGURAÇÕES
--- =======================
-local SPEED_DEFAULT = 16         -- WalkSpeed normal
-local SPEED_TURBO   = 36         -- WalkSpeed quando turbo ligado
-local FLY_SPEED     = 60         -- velocidade linear do fly (studs/s)
-local FLY_ACCEL     = 80         -- aceleração sentida ao começar a voar (maior = mais responsivo)
-local TP_DISTANCE   = 15         -- distância do teleporte (studs)
-local UI_SIZE       = UDim2.fromOffset(220, 140)
+local http = game:GetService("HttpService")
+local rand = function() return http:GenerateGUID(false):gsub("-", "") end
 
--- =======================
--- SERVIÇOS
--- =======================
+local _vars = {}
+for _,v in ipairs({"fly","speed","noclip","tele","menu","drag","state","statetxt","btn","anim","heartbeat","gui","root","hum"}) do
+    _vars[v] = rand()
+end
+
+local UIS = game:GetService("UserInputService")
 local Players = game:GetService("Players")
-local UIS     = game:GetService("UserInputService")
-local Run     = game:GetService("RunService")
-local StarterGui = game:GetService("StarterGui")
+local RS = game:GetService("RunService")
+local LP = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
-local LocalPlayer = Players.LocalPlayer
+local char = LP.Character or LP.CharacterAdded:Wait()
+local hum = char:WaitForChild("Humanoid")
+local root = char:WaitForChild("HumanoidRootPart")
 
--- =======================
--- ESTADO
--- =======================
 local state = {
-    flyOn = false,
-    speedOn = false,
-    holdingQ = false,
-    lastTpTick = 0,
-    tpCooldown = 0.15, -- evita spam de teleporte
+    [_vars.fly] = false,
+    [_vars.speed] = false,
+    [_vars.noclip] = false,
 }
+local flySpeed, walkSpeed, normalSpeed = 90, 38, hum.WalkSpeed
+local guiName = "UltraMenu_"..rand()
+local dragData = {dragging=false,dx=0,dy=0}
 
--- =======================
--- UTILS
--- =======================
-local function getChar()
-    local char = LocalPlayer.Character
-    if not char or not char.Parent then return nil end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum then return nil end
-    return char, hrp, hum
-end
+-- GUI
+local scr = Instance.new("ScreenGui")
+scr.Name = guiName
+scr.ResetOnSpawn = false
+scr.IgnoreGuiInset = true
+scr.Parent = game.CoreGui
 
-local function safeSetSpeed(hum, speed)
-    if hum and hum.Health > 0 then
-        hum.WalkSpeed = math.clamp(speed, 0, 100)
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 300, 0, 270)
+main.Position = UDim2.new(0.5, -150, 0.3, 0)
+main.BackgroundColor3 = Color3.fromRGB(21,22,28)
+main.BorderSizePixel = 0
+main.BackgroundTransparency = 0.12
+main.Visible = true
+main.Active = true
+main.Draggable = false
+main.Parent = scr
+
+local neon = Instance.new("UIStroke")
+neon.Color = Color3.fromRGB(0,255,127)
+neon.Thickness = 3
+neon.Parent = main
+
+local shadow = Instance.new("ImageLabel")
+shadow.Size = UDim2.new(1, 30, 1, 30)
+shadow.Position = UDim2.new(-0.05, 0, -0.05, 0)
+shadow.BackgroundTransparency = 1
+shadow.Image = "rbxassetid://1316045217"
+shadow.ImageTransparency = 0.7
+shadow.ZIndex = 0
+shadow.Parent = main
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 38)
+title.BackgroundTransparency = 1
+title.Text = "⚡ Ultra Hacker Menu ⚡"
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 23
+title.TextColor3 = Color3.fromRGB(0,255,127)
+title.TextStrokeTransparency = 0.85
+title.Parent = main
+
+local subtitle = Instance.new("TextLabel")
+subtitle.Size = UDim2.new(1, -18, 0, 20)
+subtitle.Position = UDim2.new(0, 9, 0, 34)
+subtitle.BackgroundTransparency = 1
+subtitle.Text = "Fly | Speed | Noclip | Teleport | Drag | Anti-Detect"
+subtitle.Font = Enum.Font.GothamSemibold
+subtitle.TextSize = 15
+subtitle.TextColor3 = Color3.fromRGB(156,255,200)
+subtitle.TextStrokeTransparency = 0.7
+subtitle.TextXAlignment = Enum.TextXAlignment.Left
+subtitle.Parent = main
+
+-- Drag logic
+main.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragData.dragging = true
+        dragData.dx = input.Position.X - main.Position.X.Offset
+        dragData.dy = input.Position.Y - main.Position.Y.Offset
     end
-end
-
-local function notify(msg)
-    pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = "Test Toolkit",
-            Text  = tostring(msg),
-            Duration = 2
-        })
-    end)
-end
-
--- =======================
--- GUI (criada via código)
--- =======================
-local function createUI()
-    -- Remove UI antiga se existir
-    local old = LocalPlayer.PlayerGui:FindFirstChild("TestToolkitGui")
-    if old then old:Destroy() end
-
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "TestToolkitGui"
-    gui.ResetOnSpawn = true
-    gui.IgnoreGuiInset = true
-    gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-
-    local frame = Instance.new("Frame")
-    frame.Name = "Main"
-    frame.Size = UI_SIZE
-    frame.Position = UDim2.fromOffset(20, 120)
-    frame.BackgroundTransparency = 0.1
-    frame.AutomaticSize = Enum.AutomaticSize.None
-    frame.Parent = gui
-
-    local corner = Instance.new("UICorner", frame)
-    corner.CornerRadius = UDim.new(0, 12)
-
-    local padding = Instance.new("UIPadding", frame)
-    padding.PaddingTop = UDim.new(0, 10)
-    padding.PaddingBottom = UDim.new(0, 10)
-    padding.PaddingLeft = UDim.new(0, 10)
-    padding.PaddingRight = UDim.new(0, 10)
-
-    local list = Instance.new("UIListLayout", frame)
-    list.Padding = UDim.new(0, 8)
-    list.FillDirection = Enum.FillDirection.Vertical
-    list.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    list.SortOrder = Enum.SortOrder.LayoutOrder
-
-    local title = Instance.new("TextLabel")
-    title.Name = "Title"
-    title.Size = UDim2.fromOffset(200, 22)
-    title.Text = "Test Toolkit"
-    title.TextScaled = true
-    title.BackgroundTransparency = 1
-    title.Parent = frame
-
-    local function makeButton(name, text)
-        local b = Instance.new("TextButton")
-        b.Name = name
-        b.Size = UDim2.fromOffset(200, 30)
-        b.Text = text
-        b.AutoButtonColor = true
-        b.Parent = frame
-        local c = Instance.new("UICorner", b); c.CornerRadius = UDim.new(0, 10)
-        return b
+end)
+main.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragData.dragging = false
     end
+end)
+UIS.InputChanged:Connect(function(input)
+    if dragData.dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        main.Position = UDim2.new(0, input.Position.X - dragData.dx, 0, input.Position.Y - dragData.dy)
+    end
+end)
 
-    local flyBtn   = makeButton("FlyBtn",   "Fly: OFF  (P)")
-    local speedBtn = makeButton("SpeedBtn", "Velocidade: OFF  (L)")
-
-    local info = Instance.new("TextLabel")
-    info.Name = "Info"
-    info.Size = UDim2.fromOffset(200, 36)
-    info.Text = "Q+W -> TP +15\nQ+S -> TP -15"
-    info.TextScaled = true
-    info.BackgroundTransparency = 1
-    info.Parent = frame
-
-    return gui, flyBtn, speedBtn
+-- BTN creation
+local y = 62
+local btns, anims = {}, {}
+local function makeBtn(txt, key)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, -34, 0, 38)
+    b.Position = UDim2.new(0, 17, 0, y)
+    b.BackgroundColor3 = Color3.fromRGB(39, 43, 56)
+    b.TextColor3 = Color3.fromRGB(255,255,255)
+    b.Font = Enum.Font.Gotham
+    b.TextSize = 18
+    b.Text = txt
+    b.AutoButtonColor = false
+    b.BorderSizePixel = 0
+    b.Parent = main
+    b.Name = key
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(0,255,127)
+    stroke.Thickness = 1.5
+    stroke.Transparency = 0.7
+    stroke.Parent = b
+    btns[key] = b
+    y = y + 41
+    return b
 end
 
--- =======================
--- FLY CONTROLLER
--- =======================
-local flyConn -- RenderStepped connection
+local function statusIcon(on)
+    return on and "🟢" or "🔴"
+end
+
+makeBtn("Fly: "..statusIcon(false), _vars.fly)
+makeBtn("Super Speed: "..statusIcon(false), _vars.speed)
+makeBtn("Noclip: "..statusIcon(false), _vars.noclip)
+
+local info = Instance.new("TextLabel")
+info.Size = UDim2.new(1, -20, 0, 56)
+info.Position = UDim2.new(0, 10, 0, y)
+info.BackgroundTransparency = 1
+info.Text = "Q+W: Teleport Forward\nQ+S: Teleport Backward\nDrag menu by mouse\nMenu: RightCtrl"
+info.TextColor3 = Color3.fromRGB(120,255,180)
+info.Font = Enum.Font.GothamSemibold
+info.TextSize = 15
+info.TextXAlignment = Enum.TextXAlignment.Left
+info.TextYAlignment = Enum.TextYAlignment.Top
+info.Parent = main
+
+-- Menu minimize
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 28, 0, 26)
+minBtn.Position = UDim2.new(1, -38, 0, 6)
+minBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+minBtn.BackgroundTransparency = 0.3
+minBtn.TextColor3 = Color3.fromRGB(0,255,127)
+minBtn.Text = "_"
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 20
+minBtn.ZIndex = 20
+minBtn.Parent = main
+
+local minimized = false
+minBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    main.Size = minimized and UDim2.new(0,300,0,40) or UDim2.new(0,300,0,270)
+    for k,btn in pairs(btns) do btn.Visible = not minimized end
+    info.Visible = not minimized
+    minBtn.Text = minimized and "▣" or "_"
+end)
+
+-- Animated neon border
+spawn(function()
+    while main and main.Parent do
+        neon.Color = Color3.fromHSV(tick()%5/5,1,1)
+        wait(0.08)
+    end
+end)
+
+-- MENU TOGGLE
+UIS.InputBegan:Connect(function(i, g)
+    if g then return end
+    if i.KeyCode == Enum.KeyCode.RightControl then
+        main.Visible = not main.Visible
+    end
+end)
+
+-- FLY
+local flyConn, flyBP, flyBG
 local function setFly(on)
-    if state.flyOn == on then return end
-    state.flyOn = on
-
-    local char, hrp, hum = getChar()
-    if not (char and hrp and hum) then
-        notify("Personagem inválido para Fly.")
-        return
-    end
-
-    hum.PlatformStand = false
-    hum:ChangeState(Enum.HumanoidStateType.Freefall) -- evita animação de correr no ar
-
+    state[_vars.fly] = on
+    btns[_vars.fly].Text = "Fly: "..statusIcon(on)
+    btns[_vars.fly].TextColor3 = on and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
     if on then
-        local vel = Vector3.zero
-        -- Atualiza a cada frame
-        flyConn = Run.RenderStepped:Connect(function(dt)
-            if not hrp or not hrp.Parent then return end
-            -- Captura direção a partir das teclas
-            local dir = Vector3.zero
-            if UIS:IsKeyDown(Enum.KeyCode.W) then dir += hrp.CFrame.LookVector end
-            if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= hrp.CFrame.LookVector end
-            if UIS:IsKeyDown(Enum.KeyCode.D) then dir += hrp.CFrame.RightVector end
-            if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= hrp.CFrame.RightVector end
-            if UIS:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.new(0,1,0) end
-            if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then dir -= Vector3.new(0,1,0) end
-
-            if dir.Magnitude > 0 then
-                dir = dir.Unit
-                -- aceleração simples para suavidade
-                local targetVel = dir * FLY_SPEED
-                vel = vel:Lerp(targetVel, math.clamp(FLY_ACCEL * dt, 0, 1))
-            else
-                vel = vel:Lerp(Vector3.zero, math.clamp(FLY_ACCEL * dt, 0, 1))
+        hum.PlatformStand = true
+        flyBP = Instance.new("BodyPosition")
+        flyBP.MaxForce = Vector3.new(1e5,1e5,1e5)
+        flyBP.P = 9e4
+        flyBP.D = 1000
+        flyBP.Position = root.Position
+        flyBP.Parent = root
+        flyBG = Instance.new("BodyGyro")
+        flyBG.MaxTorque = Vector3.new(1e5,1e5,1e5)
+        flyBG.CFrame = root.CFrame
+        flyBG.P = 9e4
+        flyBG.Parent = root
+        flyConn = RS.RenderStepped:Connect(function()
+            local cf = Camera.CFrame
+            local dir = Vector3.new()
+            if UIS:IsKeyDown(Enum.KeyCode.W) then dir = dir + (cf.LookVector) end
+            if UIS:IsKeyDown(Enum.KeyCode.S) then dir = dir - (cf.LookVector) end
+            if UIS:IsKeyDown(Enum.KeyCode.A) then dir = dir - (cf.RightVector) end
+            if UIS:IsKeyDown(Enum.KeyCode.D) then dir = dir + (cf.RightVector) end
+            if UIS:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0,1,0) end
+            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3.new(0,1,0) end
+            flyBP.Position = root.Position + (dir.Magnitude>0 and dir.Unit or Vector3.new()) * flySpeed/60
+            flyBG.CFrame = Camera.CFrame
+        end)
+        hum.StateChanged:Connect(function(_,new)
+            if not state[_vars.fly] then return end
+            if new == Enum.HumanoidStateType.Seated or new == Enum.HumanoidStateType.Climbing then
+                hum.PlatformStand = true
             end
-
-            -- aplica velocidade diretamente ao HRP
-            hrp.AssemblyLinearVelocity = Vector3.new(vel.X, vel.Y, vel.Z)
-            -- opcional: mantém orientação suave (não travamos orientação para permitir olhar livre com mouse)
         end)
     else
-        if flyConn then flyConn:Disconnect() flyConn = nil end
-        -- Ao desligar, zera a velocidade vertical para cair naturalmente
-        if hrp then
-            local current = hrp.AssemblyLinearVelocity
-            hrp.AssemblyLinearVelocity = Vector3.new(current.X, 0, current.Z)
-        end
-        if hum then hum:ChangeState(Enum.HumanoidStateType.RunningNoPhysics) end
+        hum.PlatformStand = false
+        if flyBP then pcall(function() flyBP:Destroy() end) end
+        if flyBG then pcall(function() flyBG:Destroy() end) end
+        if flyConn then pcall(function() flyConn:Disconnect() end) flyConn = nil end
     end
 end
+btns[_vars.fly].MouseButton1Click:Connect(function() setFly(not state[_vars.fly]) end)
 
--- =======================
--- SPEED CONTROLLER
--- =======================
+-- SPEED
+local speedConn
 local function setSpeed(on)
-    state.speedOn = on
-    local _, _, hum = getChar()
-    if hum then
-        safeSetSpeed(hum, on and SPEED_TURBO or SPEED_DEFAULT)
+    state[_vars.speed] = on
+    btns[_vars.speed].Text = "Super Speed: "..statusIcon(on)
+    btns[_vars.speed].TextColor3 = on and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
+    if on then
+        if speedConn then speedConn:Disconnect() end
+        speedConn = RS.RenderStepped:Connect(function()
+            if hum and hum.Parent and hum.Health>0 and not state[_vars.fly] then
+                hum.WalkSpeed = walkSpeed
+            end
+        end)
+    else
+        if speedConn then speedConn:Disconnect() speedConn=nil end
+        if not state[_vars.fly] then hum.WalkSpeed = normalSpeed end
     end
 end
+btns[_vars.speed].MouseButton1Click:Connect(function() setSpeed(not state[_vars.speed]) end)
 
--- Ajusta ao respawn
-local function onCharacterAdded(char)
-    char:WaitForChild("Humanoid")
-    char:WaitForChild("HumanoidRootPart")
-    -- Reaplica estados
-    setSpeed(state.speedOn)
-    if state.flyOn then
-        setFly(false)
-        task.wait(0.1)
-        setFly(true)
+-- NOCLIP
+local noclipConn
+local function setNoclip(on)
+    state[_vars.noclip] = on
+    btns[_vars.noclip].Text = "Noclip: "..statusIcon(on)
+    btns[_vars.noclip].TextColor3 = on and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
+    if on then
+        if noclipConn then noclipConn:Disconnect() end
+        noclipConn = RS.Stepped:Connect(function()
+            if char and state[_vars.noclip] then
+                for _,v in pairs(char:GetChildren()) do
+                    if v:IsA("BasePart") then v.CanCollide = false end
+                end
+            end
+        end)
+    else
+        if noclipConn then noclipConn:Disconnect() noclipConn=nil end
+        if char then
+            for _,v in pairs(char:GetChildren()) do
+                if v:IsA("BasePart") then v.CanCollide = true end
+            end
+        end
     end
 end
+btns[_vars.noclip].MouseButton1Click:Connect(function() setNoclip(not state[_vars.noclip]) end)
 
--- =======================
--- TELEPORTE (Q + W / Q + S)
--- =======================
-local function tryTeleport(directionSign) -- 1 para frente, -1 para trás
-    local t = os.clock()
-    if t - state.lastTpTick < state.tpCooldown then return end
-    state.lastTpTick = t
+-- TELEPORT Q+W/Q+S
+local qDown, wDown, sDown = false, false, false
+UIS.InputBegan:Connect(function(i,g)
+    if g then return end
+    if i.KeyCode == Enum.KeyCode.Q then qDown = true end
+    if i.KeyCode == Enum.KeyCode.W then wDown = true end
+    if i.KeyCode == Enum.KeyCode.S then sDown = true end
+    if qDown and wDown then
+        if root and char and hum.Health>0 then
+            local v = Camera.CFrame.LookVector * 15
+            root.CFrame = root.CFrame + Vector3.new(v.X, 0, v.Z)
+        end
+    elseif qDown and sDown then
+        if root and char and hum.Health>0 then
+            local v = -Camera.CFrame.LookVector * 15
+            root.CFrame = root.CFrame + Vector3.new(v.X, 0, v.Z)
+        end
+    end
+end)
+UIS.InputEnded:Connect(function(i)
+    if i.KeyCode == Enum.KeyCode.Q then qDown = false end
+    if i.KeyCode == Enum.KeyCode.W then wDown = false end
+    if i.KeyCode == Enum.KeyCode.S then sDown = false end
+end)
 
-    local char, hrp, hum = getChar()
-    if not (char and hrp and hum) then return end
+-- Heartbeat anti-removal
+spawn(function()
+    while scr and scr.Parent do
+        scr.Name = guiName..rand():sub(1,6)
+        main.Name = "M_"..rand():sub(1,6)
+        wait(math.random(1,6)/10)
+    end
+end)
 
-    local look = hrp.CFrame.LookVector
-    local delta = look * (TP_DISTANCE * directionSign)
-    -- Teleporte seguro: mantém Y e evita clipar muito
-    local newPos = hrp.Position + Vector3.new(delta.X, 0, delta.Z)
-    hrp.CFrame = CFrame.new(newPos, newPos + hrp.CFrame.LookVector)
+-- Self-repair on respawn
+LP.CharacterAdded:Connect(function(c)
+    char = c
+    hum = c:WaitForChild("Humanoid")
+    root = c:WaitForChild("HumanoidRootPart")
+    normalSpeed = hum.WalkSpeed
+    if state[_vars.speed] then setSpeed(true) end
+    if state[_vars.noclip] then setNoclip(true) end
+end)
+
+-- Hide coregui traces (basic anti-detect)
+for _,v in ipairs(scr:GetChildren()) do
+    pcall(function() v.RobloxLocked = true end)
 end
 
--- =======================
--- INPUTS
--- =======================
-local gui, flyBtn, speedBtn = createUI()
-
-local function refreshButtons()
-    if flyBtn then flyBtn.Text = ("Fly: %s  (P)"):format(state.flyOn and "ON" or "OFF") end
-    if speedBtn then speedBtn.Text = ("Velocidade: %s  (L)"):format(state.speedOn and "ON" or "OFF") end
-end
-refreshButtons()
-
-flyBtn.MouseButton1Click:Connect(function()
-    setFly(not state.flyOn)
-    refreshButtons()
+-- Remove traces if kicked/teleported
+LP.OnTeleport:Connect(function()
+    if scr then pcall(function() scr:Destroy() end) end
 end)
 
-speedBtn.MouseButton1Click:Connect(function()
-    setSpeed(not state.speedOn)
-    refreshButtons()
-end)
-
-UIS.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-
-    if input.KeyCode == Enum.KeyCode.P then
-        setFly(not state.flyOn); refreshButtons()
-        notify("Fly: " .. (state.flyOn and "ON" or "OFF"))
-    elseif input.KeyCode == Enum.KeyCode.L then
-        setSpeed(not state.speedOn); refreshButtons()
-        notify("Velocidade: " .. (state.speedOn and "ON" or "OFF"))
-    elseif input.KeyCode == Enum.KeyCode.Q then
-        state.holdingQ = true
-    elseif input.KeyCode == Enum.KeyCode.W then
-        if state.holdingQ then tryTeleport(1) end
-    elseif input.KeyCode == Enum.KeyCode.S then
-        if state.holdingQ then tryTeleport(-1) end
-    end
-end)
-
-UIS.InputEnded:Connect(function(input, gameProcessed)
-    if input.KeyCode == Enum.KeyCode.Q then
-        state.holdingQ = false
-    end
-end)
-
-LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
-
--- Inicializa estado ao carregar
-task.defer(function()
-    local _, _, hum = getChar()
-    if hum then
-        safeSetSpeed(hum, SPEED_DEFAULT)
-    end
-end)
+print("Ultra Advanced Menu loaded. Test your anti-cheat against it!")
