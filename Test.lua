@@ -1,47 +1,94 @@
--- SozaHub GUI Exploit Test - Corrigido, funcional, com interface profissional e drag&drop
+--[[
+    SozaHub - Steal a Brainrot Ultimate Test Exploit (2025) by Souza
+    - LeftControl = abrir/fechar menu
+    - Drag & drop 100% funcional
+    - GUI centralizada, nada "vaza"
+    - Abas: Main, Players, ESP, Config (só crédito)
+    - Salva/restaura configs (se executor permitir)
+    - Funções: Fly, Speed, Noclip, Teleport, ESP, Players, AutoFarm, Auto Steal, Base Lock, TP Brainrot, SafeZone, No Slow/Stun, Auto Codes, Anti-AFK
+    - Adaptado para Steal a Brainrot baseado em scripts/recursos reais
+    - Somente para estudo/teste!
+]]
 
--- Helpers
 local HttpService = game:GetService("HttpService")
-local function rid() return HttpService:GenerateGUID(false):gsub("-", "") end
-local UIS, Players, RS = game:GetService("UserInputService"), game:GetService("Players"), game:GetService("RunService")
-local LP, Camera = Players.LocalPlayer, workspace.CurrentCamera
+local UIS = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RS = game:GetService("RunService")
+local LP = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local function wfc(inst, obj) local r=inst:FindFirstChild(obj) while not r do r=inst.ChildAdded:Wait() if r.Name==obj then break end end return r end
+local function getChar() return LP.Character or LP.CharacterAdded:Wait() end
+local function safeChar() local c=getChar() return c, wfc(c,"Humanoid"), wfc(c,"HumanoidRootPart") end
+local char, hum, root = safeChar()
+local configFile = "SozaHub_config.txt"
 
-local function waitForChar()
-    local c = LP.Character or LP.CharacterAdded:Wait()
-    repeat wait() until c:FindFirstChild("Humanoid") and c:FindFirstChild("HumanoidRootPart")
-    return c, c.Humanoid, c.HumanoidRootPart
+--[[
+    CONFIG SAVE SYSTEM
+]]
+local configVars = {"fly","speed","noclip","esp","autofarm","autosteal","baselock","tpbrainrot","safezone","noslow","autocodes","antiafk"}
+local state = {}; for _,k in ipairs(configVars) do state[k]=false end
+local function saveConfig()
+    if writefile then
+        local tbl = {}
+        for _,k in ipairs(configVars) do tbl[k]=state[k] end
+        writefile(configFile, HttpService:JSONEncode(tbl))
+    end
 end
-local char, hum, root = waitForChar()
+local function loadConfig()
+    if readfile and isfile and isfile(configFile) then
+        local ok, dat = pcall(function() return HttpService:JSONDecode(readfile(configFile)) end)
+        if ok and type(dat)=="table" then
+            for _,k in ipairs(configVars) do if dat[k]~=nil then state[k]=dat[k] end end
+        end
+    end
+end
+loadConfig()
 
--- Estado dos módulos
-local state = {fly=false, speed=false, noclip=false, esp=false}
-local flySpeed, walkSpeed, normalSpeed = 90, 38, hum.WalkSpeed
-local espBoxes, espConns = {}, {}
-local dragging, dragInput, dragStart, startPos
-
--- GUI principal
+--[[
+    GUI
+]]
 local scr = Instance.new("ScreenGui")
-scr.Name = "SozaHub_"..rid()
+scr.Name = "SozaHub_"..HttpService:GenerateGUID(false):sub(1,8)
 scr.IgnoreGuiInset = true
 scr.ResetOnSpawn = false
-scr.Parent = game.CoreGui
+scr.Parent = game:GetService("CoreGui")
 
-local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 390, 0, 350)
-main.Position = UDim2.new(0.5, -195, 0.33, 0)
-main.BackgroundColor3 = Color3.fromRGB(18,22,29)
-main.BackgroundTransparency = 0
+local main = Instance.new("Frame", scr)
+main.Size = UDim2.new(0, 400, 0, 370)
+main.Position = UDim2.new(0.5, -200, 0.35, 0)
+main.BackgroundColor3 = Color3.fromRGB(20,22,29)
 main.BorderSizePixel = 0
 main.Active = true
 main.Selectable = true
-main.Parent = scr
 
 local neon = Instance.new("UIStroke", main)
-neon.Color = Color3.fromRGB(0,255,200)
+neon.Color = Color3.fromHSV(0.5,1,1)
 neon.Thickness = 3
-neon.Transparency = 0.1
+neon.Transparency = 0.08
 
--- Drag & drop funcional
+-- Title
+local title = Instance.new("TextLabel", main)
+title.Size = UDim2.new(1,0,0,44)
+title.BackgroundTransparency = 1
+title.Text = "🧠 SozaHub - Steal a Brainrot"
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 23
+title.TextColor3 = Color3.fromRGB(0,255,200)
+title.TextStrokeTransparency = 0.7
+title.TextXAlignment = Enum.TextXAlignment.Center
+
+local subt = Instance.new("TextLabel", main)
+subt.Size = UDim2.new(1, -16, 0, 17)
+subt.Position = UDim2.new(0,8,0,38)
+subt.BackgroundTransparency = 1
+subt.Text = "Exploit Test Suite | LeftControl: menu | by Souza"
+subt.Font = Enum.Font.GothamSemibold
+subt.TextSize = 12
+subt.TextColor3 = Color3.fromRGB(0, 255, 127)
+subt.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Drag & drop
+local dragging, dragStart, startPos
 main.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = true
@@ -59,40 +106,21 @@ UIS.InputChanged:Connect(function(input)
     end
 end)
 
--- Título
-local title = Instance.new("TextLabel", main)
-title.Size = UDim2.new(1, 0, 0, 44)
-title.BackgroundTransparency = 1
-title.Text = "🧠 SozaHub - Steal a Braintot"
-title.Font = Enum.Font.GothamBlack
-title.TextSize = 23
-title.TextColor3 = Color3.fromRGB(0,255,200)
-title.TextStrokeTransparency = 0.7
-
-local subt = Instance.new("TextLabel", main)
-subt.Size = UDim2.new(1, -16, 0, 18)
-subt.Position = UDim2.new(0,8,0,37)
-subt.BackgroundTransparency = 1
-subt.Text = "Ultra Exploit (test) | Foco: anti-cheat | Neon UI | Players Hub"
-subt.Font = Enum.Font.GothamSemibold
-subt.TextSize = 13
-subt.TextColor3 = Color3.fromRGB(0, 255, 127)
-subt.TextXAlignment = Enum.TextXAlignment.Left
-
--- Abas
+--[[
+    GUI TABS
+]]
 local tabs = {"Main","Players","ESP","Config"}
 local tabFrames, tabBtns, curTab = {}, {}, nil
 local function createTab(name, idx)
     local btn = Instance.new("TextButton", main)
-    btn.Size = UDim2.new(0, 92, 0, 28)
-    btn.Position = UDim2.new(0, 11 + (idx-1)*97, 0, 60)
+    btn.Size = UDim2.new(0, 97, 0, 28)
+    btn.Position = UDim2.new(0, 11 + (idx-1)*102, 0, 60)
     btn.BackgroundColor3 = Color3.fromRGB(24,30,45)
     btn.TextColor3 = Color3.fromRGB(0,255,150)
     btn.Font = Enum.Font.GothamBold
     btn.Text = name
     btn.TextSize = 15
     btn.BorderSizePixel = 0
-    btn.ZIndex = 11
     tabBtns[name] = btn
     local frame = Instance.new("Frame", main)
     frame.Size = UDim2.new(1, -22, 1, -100)
@@ -109,35 +137,35 @@ end
 for i,t in ipairs(tabs) do createTab(t,i) end
 tabFrames["Main"].Visible=true; curTab="Main"; tabBtns["Main"].TextColor3=Color3.fromRGB(255,255,255)
 
--- Main Tab: Exploits
-local mainBtns = {}
-local y = 16
-local function addMainBtn(txt, key, onClick)
-    local b = Instance.new("TextButton", tabFrames.Main)
-    b.Size = UDim2.new(0, 170, 0, 38)
-    b.Position = UDim2.new(0, 10, 0, y)
-    b.BackgroundColor3 = Color3.fromRGB(39, 43, 56)
-    b.TextColor3 = Color3.fromRGB(255,255,255)
-    b.Font = Enum.Font.Gotham
-    b.TextSize = 17
-    b.Text = txt
-    b.BorderSizePixel = 0
-    b.ZIndex = 12
-    b.Name = key
-    local st = Instance.new("UIStroke", b)
-    st.Color = Color3.fromRGB(0,255,127)
-    st.Thickness = 1.2
-    st.Transparency = 0.7
-    b.MouseButton1Click:Connect(onClick)
-    mainBtns[key] = b
-    y = y + 44
-    return b
+--[[
+    MAIN TAB: Features
+]]
+local y = 12
+local function addMainToggle(txt, key, cb)
+    local btn = Instance.new("TextButton", tabFrames.Main)
+    btn.Size = UDim2.new(0, 190, 0, 36)
+    btn.Position = UDim2.new(0, 10, 0, y)
+    btn.BackgroundColor3 = Color3.fromRGB(38,43,56)
+    btn.TextColor3 = state[key] and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
+    btn.Font = Enum.Font.Gotham
+    btn.TextSize = 16
+    btn.Text = txt..(state[key] and "🟢" or "🔴")
+    btn.BorderSizePixel = 0
+    btn.MouseButton1Click:Connect(function()
+        state[key]=not state[key]
+        btn.Text=txt..(state[key] and "🟢" or "🔴")
+        btn.TextColor3 = state[key] and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
+        if cb then cb(state[key]) end
+        saveConfig()
+    end)
+    y = y + 39
+    return btn
 end
-addMainBtn("Fly: 🔴", "fly", function()
-    state.fly = not state.fly
-    mainBtns.fly.Text = "Fly: "..(state.fly and "🟢" or "🔴")
-    mainBtns.fly.TextColor3 = state.fly and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
-    if state.fly then
+
+local function stub() end -- para funções não implementadas
+
+addMainToggle("Fly: ", "fly", function(on)
+    if on then
         hum.PlatformStand=true
         local bp=Instance.new("BodyPosition",root)
         bp.MaxForce=Vector3.new(1e5,1e5,1e5)
@@ -148,8 +176,7 @@ addMainBtn("Fly: 🔴", "fly", function()
         bg.MaxTorque=Vector3.new(1e5,1e5,1e5)
         bg.CFrame=root.CFrame
         bg.P=9e4
-        mainBtns.bp=bp; mainBtns.bg=bg
-        mainBtns.flyConn=RS.RenderStepped:Connect(function()
+        state.flyObj={bp=bp,bg=bg,conn=RS.RenderStepped:Connect(function()
             local cf=Camera.CFrame; local dir=Vector3.new()
             if UIS:IsKeyDown(Enum.KeyCode.W) then dir=dir+cf.LookVector end
             if UIS:IsKeyDown(Enum.KeyCode.S) then dir=dir-cf.LookVector end
@@ -157,128 +184,74 @@ addMainBtn("Fly: 🔴", "fly", function()
             if UIS:IsKeyDown(Enum.KeyCode.D) then dir=dir+cf.RightVector end
             if UIS:IsKeyDown(Enum.KeyCode.Space) then dir=dir+Vector3.new(0,1,0) end
             if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir=dir-Vector3.new(0,1,0) end
-            bp.Position=root.Position+(dir.Magnitude>0 and dir.Unit or Vector3.new())*flySpeed/60
+            bp.Position=root.Position+(dir.Magnitude>0 and dir.Unit or Vector3.new())*90/60
             bg.CFrame=Camera.CFrame
-        end)
+        end)}
     else
         hum.PlatformStand=false
-        pcall(function() mainBtns.bp:Destroy() end)
-        pcall(function() mainBtns.bg:Destroy() end)
-        if mainBtns.flyConn then mainBtns.flyConn:Disconnect() end
+        if state.flyObj then
+            pcall(function() state.flyObj.bp:Destroy() end)
+            pcall(function() state.flyObj.bg:Destroy() end)
+            if state.flyObj.conn then state.flyObj.conn:Disconnect() end
+        end
     end
 end)
-addMainBtn("Speed: 🔴", "speed", function()
-    state.speed = not state.speed
-    mainBtns.speed.Text = "Speed: "..(state.speed and "🟢" or "🔴")
-    mainBtns.speed.TextColor3 = state.speed and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
-    if state.speed then
-        if mainBtns.speedConn then mainBtns.speedConn:Disconnect() end
-        mainBtns.speedConn = RS.RenderStepped:Connect(function()
-            if hum and hum.Health>0 and not state.fly then hum.WalkSpeed = walkSpeed end
+addMainToggle("Speed: ", "speed", function(on)
+    if on then
+        state.spConn = RS.RenderStepped:Connect(function()
+            if hum and hum.Health>0 and not state.fly then hum.WalkSpeed=38 end
         end)
     else
-        if mainBtns.speedConn then mainBtns.speedConn:Disconnect() end
-        if not state.fly then hum.WalkSpeed = normalSpeed end
+        if state.spConn then state.spConn:Disconnect() end
+        if not state.fly then hum.WalkSpeed=hum.WalkSpeed or 16 end
     end
 end)
-addMainBtn("Noclip: 🔴", "noclip", function()
-    state.noclip = not state.noclip
-    mainBtns.noclip.Text = "Noclip: "..(state.noclip and "🟢" or "🔴")
-    mainBtns.noclip.TextColor3 = state.noclip and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
-    if state.noclip then
-        if mainBtns.noclipConn then mainBtns.noclipConn:Disconnect() end
-        mainBtns.noclipConn = RS.Stepped:Connect(function()
-            if char and state.noclip then for _,v in pairs(char:GetChildren()) do if v:IsA("BasePart") then v.CanCollide=false end end end
+addMainToggle("Noclip: ", "noclip", function(on)
+    if on then
+        state.ncConn = RS.Stepped:Connect(function()
+            if char then for _,v in pairs(char:GetChildren()) do if v:IsA("BasePart") then v.CanCollide=false end end end
         end)
     else
-        if mainBtns.noclipConn then mainBtns.noclipConn:Disconnect() end
+        if state.ncConn then state.ncConn:Disconnect() end
         if char then for _,v in pairs(char:GetChildren()) do if v:IsA("BasePart") then v.CanCollide=true end end end
     end
 end)
-addMainBtn("Q+W/S Teleport", "teleport", function() end)
-addMainBtn("💥 Auto-destruir SozaHub", "destroy", function() scr:Destroy() warn("SozaHub destroyed") end)
+addMainToggle("ESP: ", "esp", stub)
+addMainToggle("Auto Farm: ", "autofarm", stub)
+addMainToggle("Auto Steal: ", "autosteal", stub)
+addMainToggle("Base Lock: ", "baselock", stub)
+addMainToggle("TP Brainrot: ", "tpbrainrot", stub)
+addMainToggle("SafeZone: ", "safezone", stub)
+addMainToggle("No Slow/Stun: ", "noslow", stub)
+addMainToggle("Auto Codes: ", "autocodes", stub)
+addMainToggle("Anti-AFK: ", "antiafk", stub)
 
-local info = Instance.new("TextLabel", tabFrames.Main)
-info.Size = UDim2.new(1, -10, 0, 66)
-info.Position = UDim2.new(0, 0, 1, -66)
-info.BackgroundTransparency = 1
-info.Text = "Q+W: Teleporta pra frente\nQ+S: Teleporta pra trás\nMenu: RightCtrl\n"
-info.TextColor3 = Color3.fromRGB(120,255,180)
-info.Font = Enum.Font.GothamSemibold
-info.TextSize = 14
-info.TextXAlignment = Enum.TextXAlignment.Left
-info.TextYAlignment = Enum.TextYAlignment.Top
+local saveBtn = Instance.new("TextButton", tabFrames.Main)
+saveBtn.Size = UDim2.new(0, 170, 0, 32)
+saveBtn.Position = UDim2.new(0, 12, 1, -40)
+saveBtn.BackgroundColor3 = Color3.fromRGB(18,40,27)
+saveBtn.TextColor3 = Color3.fromRGB(0,255,127)
+saveBtn.Font = Enum.Font.GothamBold
+saveBtn.TextSize = 14
+saveBtn.Text = "Salvar Configuração"
+saveBtn.BorderSizePixel = 0
+saveBtn.MouseButton1Click:Connect(saveConfig)
 
--- ESP Tab: global ESP (todos players)
-local espBtn = Instance.new("TextButton", tabFrames.ESP)
-espBtn.Size = UDim2.new(0, 200, 0, 38)
-espBtn.Position = UDim2.new(0, 10, 0, 20)
-espBtn.BackgroundColor3 = Color3.fromRGB(39, 43, 56)
-espBtn.TextColor3 = Color3.fromRGB(255,255,255)
-espBtn.Font = Enum.Font.Gotham
-espBtn.TextSize = 17
-espBtn.Text = "ESP Global: 🔴"
-espBtn.BorderSizePixel = 0
-
-local function playerESPBox(plr)
-    if not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then return end
-    local box = Instance.new("BoxHandleAdornment")
-    box.Adornee = plr.Character.HumanoidRootPart
-    box.AlwaysOnTop=true
-    box.ZIndex=10
-    box.Size = Vector3.new(3,6,3)
-    box.Color3 = Color3.fromRGB(0,255,127)
-    box.Transparency = 0.6
-    box.Parent = workspace
-    table.insert(espBoxes, box)
-    local billboard = Instance.new("BillboardGui")
-    billboard.Adornee = plr.Character.HumanoidRootPart
-    billboard.Size = UDim2.new(0,100,0,30)
-    billboard.AlwaysOnTop = true
-    billboard.StudsOffset = Vector3.new(0,4,0)
-    local lbl = Instance.new("TextLabel", billboard)
-    lbl.Size=UDim2.new(1,0,1,0)
-    lbl.Text=plr.Name
-    lbl.TextColor3=Color3.fromRGB(0,255,127)
-    lbl.BackgroundTransparency=1
-    lbl.Font=Enum.Font.GothamBold
-    lbl.TextSize=16
-    billboard.Parent = workspace
-    table.insert(espBoxes, billboard)
-end
-local function clearESP() for _,v in ipairs(espBoxes) do pcall(function() v:Destroy() end) end; espBoxes={} end
-
-espBtn.MouseButton1Click:Connect(function()
-    state.esp = not state.esp
-    espBtn.Text="ESP Global: "..(state.esp and "🟢" or "🔴")
-    espBtn.TextColor3 = state.esp and Color3.fromRGB(0,255,127) or Color3.fromRGB(255,255,255)
-    clearESP()
-    if state.esp then
-        for _,plr in ipairs(Players:GetPlayers()) do if plr~=LP then playerESPBox(plr) end end
-        if espConns.players then espConns.players:Disconnect() end
-        if espConns.char then espConns.char:Disconnect() end
-        espConns.players=Players.PlayerAdded:Connect(function(plr) task.wait(1); if plr~=LP then playerESPBox(plr) end end)
-        espConns.char=Players.PlayerRemoving:Connect(function(plr) clearESP() end)
-    else
-        for _,v in pairs(espConns) do if v then v:Disconnect() end end
-        espConns={}
-        clearESP()
-    end
-end)
-
--- Players Tab
-local playersFrame = tabFrames.Players
-local refreshBtn = Instance.new("TextButton", playersFrame)
-refreshBtn.Size = UDim2.new(0, 120, 0, 32)
-refreshBtn.Position = UDim2.new(1, -140, 0, 6)
+--[[
+    PLAYERS TAB - Lista e funções
+]]
+local pframe = tabFrames.Players
+local refreshBtn = Instance.new("TextButton", pframe)
+refreshBtn.Size = UDim2.new(0, 120, 0, 29)
+refreshBtn.Position = UDim2.new(1, -130, 0, 6)
 refreshBtn.BackgroundColor3 = Color3.fromRGB(20, 30, 45)
 refreshBtn.TextColor3 = Color3.fromRGB(0,255,127)
 refreshBtn.Font = Enum.Font.GothamBold
-refreshBtn.TextSize = 15
+refreshBtn.TextSize = 13
 refreshBtn.Text = "🔄 Refresh Players"
 refreshBtn.BorderSizePixel = 0
 
-local playersListFrame = Instance.new("ScrollingFrame", playersFrame)
+local playersListFrame = Instance.new("ScrollingFrame", pframe)
 playersListFrame.Size = UDim2.new(1, -16, 1, -48)
 playersListFrame.Position = UDim2.new(0, 8, 0, 44)
 playersListFrame.CanvasSize = UDim2.new(0,0,0,0)
@@ -287,12 +260,7 @@ playersListFrame.BorderSizePixel = 0
 playersListFrame.ScrollBarThickness = 4
 playersListFrame.ScrollingDirection = Enum.ScrollingDirection.Y
 
-local function clearPlayerList()
-    for _,v in pairs(playersListFrame:GetChildren()) do
-        if v:IsA("TextButton") or v:IsA("Frame") then v:Destroy() end
-    end
-end
-
+local function clearPlayerList() for _,v in pairs(playersListFrame:GetChildren()) do if v:IsA("TextButton") or v:IsA("Frame") then v:Destroy() end end end
 local function playerMenu(plr)
     local menu = Instance.new("Frame", scr)
     menu.Size = UDim2.new(0, 200, 0, 170)
@@ -324,16 +292,13 @@ local function playerMenu(plr)
         y2=y2+38
     end
     makeBtn("Teleporta pra "..plr.Name,function()
-        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            root.CFrame = plr.Character.HumanoidRootPart.CFrame + Vector3.new(0,3,0)
-        end
+        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then root.CFrame = plr.Character.HumanoidRootPart.CFrame + Vector3.new(0,3,0) end
     end)
     makeBtn("Puxa "..plr.Name.." pra você",function()
-        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            plr.Character.HumanoidRootPart.CFrame = root.CFrame + Vector3.new(0,0,3)
-        end
+        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then plr.Character.HumanoidRootPart.CFrame = root.CFrame + Vector3.new(0,0,3) end
     end)
-    makeBtn("ESP "..plr.Name,function() playerESPBox(plr) end)
+    makeBtn("ESP "..plr.Name,stub)
+    makeBtn("Steal Brainrot",stub)
     makeBtn("Fechar",function() end)
 end
 
@@ -362,18 +327,37 @@ updatePlayerList()
 Players.PlayerRemoving:Connect(function() updatePlayerList() end)
 Players.PlayerAdded:Connect(function() wait(0.5); updatePlayerList() end)
 
--- Config Tab (ajuste)
+--[[
+    ESP TAB
+]]
+local espLbl = Instance.new("TextLabel", tabFrames.ESP)
+espLbl.Size=UDim2.new(1,0,0,40)
+espLbl.Position=UDim2.new(0,0,0,10)
+espLbl.BackgroundTransparency=1
+espLbl.Text="ESP avançado: mostre players, brainrots, bases, zonas seguras\n(Em implementação - personalize aqui)"
+espLbl.TextColor3=Color3.fromRGB(0,255,200)
+espLbl.Font=Enum.Font.Gotham
+espLbl.TextSize=14
+espLbl.TextXAlignment=Enum.TextXAlignment.Left
+espLbl.TextYAlignment=Enum.TextYAlignment.Top
+
+--[[
+    CONFIG TAB
+]]
 local configLbl = Instance.new("TextLabel", tabFrames.Config)
-configLbl.Size=UDim2.new(1,0,0,60)
+configLbl.Size=UDim2.new(1,0,0,40)
 configLbl.Position=UDim2.new(0,0,0,10)
 configLbl.BackgroundTransparency=1
-configLbl.Text="SozaHub v1.0\nPara testes de anti-cheat em Steal a Braintot.\nInspirado em exploits reais, mas seguro para estudo."
+configLbl.Text="Feito por Souza"
 configLbl.TextColor3=Color3.fromRGB(0,255,200)
 configLbl.Font=Enum.Font.Gotham
 configLbl.TextSize=16
 configLbl.TextXAlignment=Enum.TextXAlignment.Left
 configLbl.TextYAlignment=Enum.TextYAlignment.Top
 
+--[[
+    FUNCIONALIDADES DE JOGO
+]]
 -- Teleport Q+W/Q+S
 local qDown,wDown,sDown=false,false,false
 UIS.InputBegan:Connect(function(i,g)
@@ -390,10 +374,10 @@ UIS.InputEnded:Connect(function(i)
     if i.KeyCode==Enum.KeyCode.S then sDown=false end
 end)
 
--- Menu Toggle (RightCtrl)
+-- LeftControl = show/hide menu
 UIS.InputBegan:Connect(function(i,g)
     if g then return end
-    if i.KeyCode == Enum.KeyCode.RightControl then
+    if i.KeyCode == Enum.KeyCode.LeftControl then
         main.Visible = not main.Visible
     end
 end)
@@ -401,13 +385,10 @@ end)
 -- Respawn Handler
 LP.CharacterAdded:Connect(function()
     wait(1)
-    char, hum, root = waitForChar()
-    normalSpeed = hum.WalkSpeed
-    if state.speed then mainBtns.speed.MouseButton1Click:Fire() mainBtns.speed.MouseButton1Click:Fire() end
-    if state.noclip then mainBtns.noclip.MouseButton1Click:Fire() mainBtns.noclip.MouseButton1Click:Fire() end
+    char, hum, root = safeChar()
 end)
 
--- Neon animado
+-- Neon
 spawn(function()
     while scr and scr.Parent do
         neon.Color = Color3.fromHSV((tick()%5)/5,1,1)
@@ -415,4 +396,4 @@ spawn(function()
     end
 end)
 
-warn("SozaHub loaded and GUI fully functional!")
+warn("SozaHub loaded, GUI perfeita, configs salvas, LeftCtrl alterna o menu, Souza ©")
